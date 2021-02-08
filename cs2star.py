@@ -33,7 +33,7 @@ def parse():
     parser.add_argument('extraction', type=Path, help='a cryosparc "extract from micrographs" job directory')
     parser.add_argument('destination', nargs='?', default=Path.cwd(), type=Path, help='the destination directory')
     parser.add_argument('--classes', nargs='+', type=int, help='only use particles from these classes')
-    parser.add_argument('-f', '--force-overwrite', action='store_true', help='overwrite the existing destination directory if present')
+    parser.add_argument('-f', '--force-overwrite', action='count', help='overwrite the existing destination directory if present. Passed once, overwrite star file only. Twice, also files/symlinks')
     parser.add_argument('-d', '--dry-run', action='store_true', help='dry run')
     parser.add_argument('-c', '--copy', action='store_true', help='copy the images instead of symlinking to them')
     args = parser.parse_args(sys.argv[1:])
@@ -72,9 +72,6 @@ def main():
     dest_img = dest / 'images'
     dest_star = dest / 'particles.star'
     log_file = dest / 'cs2star.log'
-    if dest_img.is_dir() or dest_star.is_file():
-        if not args.force_overwrite:
-            parser.error('some destination files already exists. To overwrite, use -f')
     log.append(f'Destination directory: {str(dest)}')
     log.append('=' * 80)
 
@@ -87,6 +84,8 @@ def main():
 
     # make dest dir
     dest_img.mkdir(parents=True, exist_ok=True)
+    if dest_star.is_file() and args.force_overwrite == 0:
+        parser.error('particle file already exists. To overwrite, use -f')
 
     # convert positions
     cs_passthroughs = [str(f) for f in cs_passthroughs]
@@ -124,15 +123,18 @@ def main():
         # save the relative path for later to edit the starfile
         imgs_dest.append(mrcs)
         moved = dest_img / mrcs
-        if args.copy:
-            shutil.copy(mrc, moved)
+        if moved.is_file() and args.force_overwrite <= 1:
+            exists = True
+            continue
         else:
-            try:
+            if args.copy:
+                shutil.copy(mrc, moved)
+            else:
+                if moved.is_symlink():
+                    moved.unlink()
                 moved.symlink_to(mrc)
-            except FileExistsError:
-                exists = True
-    if exists:
-        print('INFO: some files were not symlinked because they already exist')
+    if exists and args.force_overwrite <= 1:
+        print('INFO: some files were not symlinked/copied because they already exist. Use -ff to force overwrite')
 
     # write log
     header = '# this directory was converted from cryosparc with cs2star.py. Command:'
