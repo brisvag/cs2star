@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
+
 """
 copy and convert a cryosparc dir into a relion dir
 """
 
-import argparse
 import sys
 import shutil
 import warnings
@@ -148,7 +148,8 @@ def main(positions, extraction, destination, classes, overwrite, dry_run, copy):
     with open(log_file, 'w+') as f:
         f.write(f'{header}\n{command}\n{log}\n')
 
-    print('Done!')
+    click.secho('Done!')
+
 
 if __name__ == '__main__':
     main()
