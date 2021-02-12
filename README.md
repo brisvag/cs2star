@@ -5,7 +5,7 @@ A simple utility that wraps around `csparc2star.py` to convert particle position
 # Usage
 
 ```bash
-cs2star.py particle_positions_job_directory extract_from_micrographs_job_directory destination_directory
+cs2star.py particle_positions_job_directory [destination_directory]
 ```
 
 A couple more options are available, check out the help page with `-h`.
