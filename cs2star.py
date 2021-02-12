@@ -28,22 +28,19 @@ real_dir = click.Path(exists=True, file_okay=False, resolve_path=True)
 
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
 @click.argument('positions', type=real_dir)
-@click.argument('extraction', type=real_dir)
 @click.argument('destination', required=False, default='.', type=click.Path(file_okay=False))
 @click.option('--classes', help='only use particles from these classes. Comma-separated list.')
 @click.option('-f', '--overwrite', count=True, help='overwrite the existing destination directory if present.'
               'Passed once, overwrite star file only. Twice, also files/symlinks')
 @click.option('-d', '--dry-run', is_flag=True)
 @click.option('-c/-s', '--copy/--symlink', help='copy the images or symlink to them')
-def main(positions, extraction, destination, classes, overwrite, dry_run, copy):
+def main(positions, destination, classes, overwrite, dry_run, copy):
     """
     Copy and convert a cryosparc dir into a relion-ready dir.
 
-    POSITIONS: a cryosparc job containing a "*particles.cs" file. The particles must contain references to images (blobs).
+    POSITIONS: a cryosparc job containing a "*particles.cs" file.
 
-    EXTRACTION: a cryosparc "extract from micrographs" job directory.
-
-    DESTINATION: the destination directory.
+    DESTINATION: the destination directory. [Default: '.']
     """
     log = ['=' * 80, 'Parameters:']
 
@@ -65,11 +62,6 @@ def main(positions, extraction, destination, classes, overwrite, dry_run, copy):
         click.UsageError('no usable particle positions files were found')
     log.append(f'Particle files: {[str(f) for f in cs_inputs]}')
     log.append(f'Passthrough files: {[str(f) for f in cs_passthroughs]}')
-
-    cs_img = Path(extraction) / 'extract'
-    if not cs_img.is_dir():
-        click.UsageError('the micrographs directory does not exist. Did you provide the right job?')
-    log.append(f'Micrograph directory: {str(cs_img)}')
 
     dest = Path(destination)
     dest_img = dest / 'images'
@@ -110,7 +102,9 @@ def main(positions, extraction, destination, classes, overwrite, dry_run, copy):
     df_all = pyem.star.check_defaults(df_all, inplace=True)
     df_all = pyem.star.remove_deprecated_relion2(df_all, inplace=True)
 
-    # fix micrograph paths
+    # get real micrograph paths
+    imgs_orig = np.unique(df['rlnMicrographName'].to_numpy())
+    # change them to the copied/symlinked version
     df['rlnMicrographName'] = './images/' + df['rlnMicrographName'].str.split('/').str.get(-1) + 's'
 
     click.secho('Writing star file...')
@@ -118,26 +112,22 @@ def main(positions, extraction, destination, classes, overwrite, dry_run, copy):
     pyem.star.write_star(str(dest_star), df, resort_records=True, optics=True)
 
     # symlink/copy images
-    imgs_orig = cs_img.iterdir()
-    imgs_dest = []
     exists = False
     click.secho(f'{"Copying" if copy else "Linking"} images to "{dest_img}"...')
     for mrc in imgs_orig:
-        # add s to extension for relion
-        mrcs = Path(f'{mrc.relative_to(cs_img)}s')
-        # save the relative path for later to edit the starfile
-        imgs_dest.append(mrcs)
-        moved = dest_img / mrcs
+        orig = cs_pos.parent / mrc
+        # new path + add s to extension for relion
+        moved = Path(dest_img / (orig.name + 's'))
         if moved.is_file() and overwrite <= 1:
             exists = True
             continue
         else:
             if copy:
-                shutil.copy(mrc, moved)
+                shutil.copy(orig, moved)
             else:
                 if moved.is_symlink():
                     moved.unlink()
-                moved.symlink_to(mrc)
+                moved.symlink_to(orig)
     if exists and overwrite <= 1:
         click.secho('INFO: some files were not symlinked/copied because they already exist.'
                     'Use -ff to force overwrite', bg='red')
