@@ -6,28 +6,16 @@ copy and convert a cryosparc dir into a relion dir
 
 import sys
 import shutil
-import warnings
 from pathlib import Path
 
 import pandas as pd
 import numpy as np
 import click
-
-try:
-    import pyem
-except ImportError:
-    # better way to do this?
-    pyem_path = '/programs/x86_64-linux/pyem/20200813/pyem'
-    sys.path.append(pyem_path)
-    with warnings.catch_warnings():
-        warnings.filterwarnings('ignore', category=SyntaxWarning)
-        import pyem
-
-real_dir = click.Path(exists=True, file_okay=False, resolve_path=True)
+import pyem
 
 
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
-@click.argument('positions', type=real_dir)
+@click.argument('positions', type=click.Path(exists=True, file_okay=False, resolve_path=True))
 @click.argument('destination', required=False, default='.', type=click.Path(file_okay=False))
 @click.option('--classes', help='only use particles from these classes. Comma-separated list.')
 @click.option('-f', '--overwrite', count=True, help='overwrite the existing destination directory if present.'
@@ -44,7 +32,6 @@ def main(positions, destination, classes, overwrite, dry_run, copy):
     """
     log = ['=' * 80, 'Parameters:']
 
-    # interpret args
     # get all the particle files
     cs_pos = Path(positions)
     cs_inputs = []
