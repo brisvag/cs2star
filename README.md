@@ -8,13 +8,14 @@ This package requires [pyem](https://github.com/asarnow/pyem), which is not avai
 
 ```bash
 git clone https://github.com/asarnow/pyem.git
+cd pyem
 pip install -e .
 ```
 
 # Usage
 
 ```bash
-cs2star particle_positions_job_directory [destination_directory]
+cs2star cryosparc_job_dir [dest_dir]
 ```
 
 A couple more options are available, check out the help page with `-h`.
