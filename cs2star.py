@@ -52,6 +52,9 @@ def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, clas
             particles.append(f)
     if not particles:
         click.UsageError('no usable particle positions files were found')
+
+    particles.sort()
+    passthroughs.sort()
     log.append(f'Particle files: {[str(f) for f in particles]}')
     log.append(f'Passthrough files: {[str(f) for f in passthroughs]}')
 
@@ -84,12 +87,12 @@ def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, clas
     # convert positions
     passthroughs = [str(f) for f in passthroughs]
     df = pd.DataFrame()
-    with click.progressbar(particles, label='Converting to ".star" format') as bar:
-        for f in bar:
-            data = np.load(f)
-            df_part = pyem.metadata.parse_cryosparc_2_cs(data, passthroughs=passthroughs,
-                                                         minphic=0, boxsize=None, swapxy=False)
-            df = df.append(df_part, ignore_index=True)
+    click.secho('Converting to star format...')
+    for f in particles:
+        data = np.load(f)
+        df_part = pyem.metadata.parse_cryosparc_2_cs(data, passthroughs=passthroughs,
+                                                     minphic=0, boxsize=None, swapxy=False)
+        df = df.append(df_part, ignore_index=True)
 
     if classes is not None:
         classes = classes.split(',')
@@ -103,22 +106,22 @@ def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, clas
 
     # symlink/copy images
     def copy_images(paths, to_dir, copy=False):
-        click.secho(f'{"Copying" if copy else "Linking"} images to {to_dir}...')
         exists = False
-        for img in paths:
-            orig = job_dir.parent / img
-            # new path + add s to extension for relion
-            moved = Path(to_dir / (orig.name + 's'))
-            if moved.is_file() and overwrite <= 1:
-                exists = True
-                continue
-            else:
-                if copy:
-                    shutil.copy(orig, moved)
+        with click.progressbar(paths, label=f'{"Copying" if copy else "Linking"} images to {to_dir}...') as images:
+            for img in images:
+                orig = job_dir.parent / img
+                # new path + add s to extension for relion
+                moved = Path(to_dir / (orig.name + 's'))
+                if moved.is_file() and overwrite <= 1:
+                    exists = True
+                    continue
                 else:
                     if moved.is_symlink():
                         moved.unlink()
-                    moved.symlink_to(orig)
+                    if copy:
+                        shutil.copy(orig, moved)
+                    else:
+                        moved.symlink_to(orig)
         if exists and overwrite <= 1:
             click.secho('INFO: some files were not symlinked/copied because they already exist.'
                         'Use -ff to force overwrite', bg='red')
