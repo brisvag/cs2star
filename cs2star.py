@@ -7,6 +7,7 @@ copy and convert a cryosparc dir into a relion dir
 import sys
 import shutil
 from pathlib import Path
+import re
 
 import pandas as pd
 import numpy as np
@@ -20,17 +21,18 @@ import pyem
 @click.option('-f', '--overwrite', count=True, help='overwrite the existing destination directory if present.'
               'Passed once, overwrite star file only. Twice, also files/symlinks')
 @click.option('-d', '--dry-run', is_flag=True)
-@click.option('-c/-s', '--copy/--symlink', help='copy the images or symlink to them [Default: copy]')
+@click.option('-c/-s', '--copy/--symlink', help='copy the images or symlink to them [default: symlink]')
 @click.option('-m', '--micrographs', is_flag=True, help='copy/link the full micrographs')
 @click.option('-p', '--patches', is_flag=True, help='copy/link the particle patches, if available', show_default=True)
+@click.option('--sets', help='only use these sets (only used if job is Particle Sets Tool). Comma-separated list.')
 @click.option('--classes', help='only use particles from these classes. Comma-separated list.')
-def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, classes):
+def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, sets, classes):
     """
     Copy and convert a cryosparc dir into a relion-ready dir.
 
     JOB_DIR: a cryosparc job containing particles files.
 
-    DEST_DIR: the destination directory. [Default: '.']
+    DEST_DIR: the destination directory. [default: '.']
     """
     log = ['=' * 80]
 
@@ -55,12 +57,31 @@ def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, clas
 
     particles.sort()
     passthroughs.sort()
+    # distinguish job types
+    split_job = False
+    if len(particles) != 1:
+        if any('split_' in str(p) for p in particles):
+            split_job = True
+            # select sets
+            if sets is not None:
+                sets = [int(i) for i in sets.split(',')]
+                filtered_particles = []
+                filtered_passthroughs = []
+                for prt, pst in zip(particles, passthroughs):
+                    set_id = int(re.search('split_(\d+)', str(prt)).group(1))
+                    if set_id in sets:
+                        filtered_particles.append(prt)
+                        filtered_passthroughs.append(pst)
+                particles = filtered_particles
+                passthroughs = filtered_passthroughs
+        elif any(re.search('cryosparc_P\d+_J\d+_\d+_particles.cs', str(p)) for p in particles):
+            particles = particles[-1:]
     log.append(f'Particle files: {[str(f) for f in particles]}')
     log.append(f'Passthrough files: {[str(f) for f in passthroughs]}')
 
     dest_dir = Path(dest_dir)
     dest_star = dest_dir / 'particles.star'
-    to_create = []
+    to_create = [dest_dir]
     if micrographs:
         dest_micrographs = dest_dir / 'micrographs'
         to_create.append(dest_micrographs)
@@ -68,7 +89,7 @@ def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, clas
         dest_patches = dest_dir / 'patches'
         to_create.append(dest_patches)
     log_file = dest_dir / 'cs2star.log'
-    log.append(f'Will create: {[str(f) for f in [dest_star] + to_create]}')
+    log.append(f'Will create: {[str(f) for f in to_create + [dest_star]]}')
     log.append('=' * 80)
 
     log = '\n'.join(log)
@@ -86,11 +107,15 @@ def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, clas
 
     # convert positions
     passthroughs = [str(f) for f in passthroughs]
+    if split_job:
+        passthrough_files = [[p] for p in passthroughs]
+    else:
+        passthrough_files = [passthroughs for _ in particles]
     df = pd.DataFrame()
     click.secho('Converting to star format...')
-    for f in particles:
+    for f, p in zip(particles, passthrough_files):
         data = np.load(f)
-        df_part = pyem.metadata.parse_cryosparc_2_cs(data, passthroughs=passthroughs,
+        df_part = pyem.metadata.parse_cryosparc_2_cs(data, passthroughs=p,
                                                      minphic=0, boxsize=None, swapxy=False)
         df = df.append(df_part, ignore_index=True)
 
