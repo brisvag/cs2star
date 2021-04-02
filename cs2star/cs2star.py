@@ -24,18 +24,18 @@ import pyem
 @click.option('-c/-s', '--copy/--symlink', help='copy the images or symlink to them [default: symlink]')
 @click.option('-m', '--micrographs', is_flag=True, help='copy/link the full micrographs')
 @click.option('-p', '--patches', is_flag=True, help='copy/link the particle patches, if available', show_default=True)
-@click.option('-r', '--relion-base-dir', type=click.Path(file_okay=False, resolve_path=True), help='base directory from which '
-                    'relion will be run. Useful if different from DEST_DIR, otherwise the paths in the .star file will be broken. '
-                    '[default: same as DEST_DIR]')
 @click.option('--sets', help='only use these sets (only used if job is Particle Sets Tool). Comma-separated list.')
 @click.option('--classes', help='only use particles from these classes. Comma-separated list.')
-def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, relion_base_dir, sets, classes):
+def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, sets, classes):
     """
     Copy and convert a cryosparc dir into a relion-ready dir.
 
     JOB_DIR: a cryosparc job containing particles files.
 
     DEST_DIR: the destination directory. [default: '.']
+
+    Note that if -p/-m are not passed, those columns are not
+    usable (due to the mrc extension and broken path)
     """
     log = ['=' * 80]
 
@@ -161,14 +161,14 @@ def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, reli
         basename = Path(path).name
         return str(new_parent / basename) + 's'
 
-    relion_base_dir = Path(relion_base_dir or dest_dir)
+    dest_dir = dest_dir.absolute()  # needed because relion thinks anything is relative to its "base" directory
     if micrographs:
         try:
             paths = np.unique(df['rlnMicrographName'].to_numpy())
         except KeyError:
             raise click.UsageError('could not find micrograph paths in the data.')
         # change them to the copied/symlinked version
-        target_dir = relion_base_dir / 'micrographs'
+        target_dir = dest_dir / 'micrographs'
         df['rlnMicrographName'] = df['rlnMicrographName'].apply(fix_path, new_parent=target_dir)
 
         copy_images(paths, dest_micrographs, copy)
@@ -181,7 +181,7 @@ def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, reli
             raise click.UsageError('could not find patch paths in the data. Were the particles ever extracted?')
         paths = np.unique(df[col_name].to_numpy())
         # change them to the copied/symlinked version
-        target_dir = relion_base_dir / 'patches'
+        target_dir = dest_dir / 'patches'
         df[col_name] = df[col_name].apply(fix_path, new_parent=target_dir)
         copy_images(paths, dest_patches, copy)
 
