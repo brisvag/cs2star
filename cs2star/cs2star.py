@@ -171,7 +171,6 @@ def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, reli
         target_dir = relion_base_dir / 'micrographs'
         df['rlnMicrographName'] = df['rlnMicrographName'].apply(fix_path, new_parent=target_dir)
 
-        df['rlnMicrographName'] = '/micrographs/' + df['rlnMicrographName'].str.split('/').str.get(-1) + 's'
         copy_images(paths, dest_micrographs, copy)
     if patches:
         for col in ('rlnImageName', 'ucsfImagePath'):
