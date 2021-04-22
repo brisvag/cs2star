@@ -49,7 +49,7 @@ def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, sets
             continue
         if 'particles' not in name and 'split_' not in name:
             continue
-        if 'excluded' in name or 'remainder' in name:
+        if any(s in name for s in ('excluded', 'remainder', 'rejected', 'uncategorized')):
             continue
         if 'passthrough' in str(f):
             passthroughs.append(f)
