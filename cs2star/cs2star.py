@@ -26,7 +26,19 @@ import pyem
 @click.option('-p', '--patches', is_flag=True, help='copy/link the particle patches, if available', show_default=True)
 @click.option('--sets', help='only use these sets (only used if job is Particle Sets Tool). Comma-separated list.')
 @click.option('--classes', help='only use particles from these classes. Comma-separated list.')
-def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, sets, classes):
+@click.option('--swapxy', is_flag=True, help='swap x and y axes')
+def main(
+    job_dir,
+    dest_dir,
+    overwrite,
+    dry_run,
+    copy,
+    micrographs,
+    patches,
+    sets,
+    classes,
+    swapxy,
+):
     """
     Copy and convert a cryosparc dir into a relion-ready dir.
 
@@ -119,7 +131,7 @@ def main(job_dir, dest_dir, overwrite, dry_run, copy, micrographs, patches, sets
     for f, p in zip(particles, passthrough_files):
         data = np.load(f)
         df_part = pyem.metadata.parse_cryosparc_2_cs(data, passthroughs=p,
-                                                     minphic=0, boxsize=None, swapxy=False)
+                                                     minphic=0, boxsize=None, swapxy=swapxy)
         df = df.append(df_part, ignore_index=True)
 
     if classes is not None:
