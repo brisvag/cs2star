@@ -1,7 +1,5 @@
-#!/usr/bin/env python3
-
 """
-copy and convert a cryosparc dir into a relion dir
+cs2star: Copy and convert a cryosparc dir into a relion dir
 """
 
 import sys
@@ -15,18 +13,20 @@ import click
 import pyem
 
 
-@click.command(context_settings=dict(help_option_names=['-h', '--help']))
+@click.command(context_settings=dict(help_option_names=['-h', '--help'], show_default=True))
 @click.argument('job_dir', type=click.Path(exists=True, file_okay=False, resolve_path=True))
 @click.argument('dest_dir', required=False, default='.', type=click.Path(file_okay=False))
 @click.option('-f', '--overwrite', count=True, help='overwrite the existing destination directory if present.'
               'Passed once, overwrite star file only. Twice, also files/symlinks')
 @click.option('-d', '--dry-run', is_flag=True)
-@click.option('-c/-s', '--copy/--symlink', help='copy the images or symlink to them [default: symlink]')
+@click.option('-c/-s', '--copy/--symlink', default=False, help='copy the images or symlink to them')
 @click.option('-m', '--micrographs', is_flag=True, help='copy/link the full micrographs')
-@click.option('-p', '--patches', is_flag=True, help='copy/link the particle patches, if available', show_default=True)
+@click.option('-p', '--patches', is_flag=True, help='copy/link the particle patches, if available')
 @click.option('--sets', help='only use these sets (only used if job is Particle Sets Tool). Comma-separated list.')
 @click.option('--classes', help='only use particles from these classes. Comma-separated list.')
-@click.option('--swapxy', is_flag=True, help='swap x and y axes')
+@click.option('--swapxy/--no-swapxy', default=True, help='swap x and y axes')
+@click.option('--inverty/--no-inverty', default=True, help='invert y axis')
+@click.option('--invertx/--no-invertx', default=False, help='invert x axis')
 def main(
     job_dir,
     dest_dir,
@@ -38,16 +38,27 @@ def main(
     sets,
     classes,
     swapxy,
+    inverty,
+    invertx,
 ):
     """
     Copy and convert a cryosparc dir into a relion-ready dir.
 
-    JOB_DIR: a cryosparc job containing particles files.
+    \b
+    Parameters
+    ==========
+    JOB_DIR:
+        a cryosparc job containing particles files.
+    DEST_DIR:
+        the destination directory. [default: '.']
 
-    DEST_DIR: the destination directory. [default: '.']
+    WARNING! This script will use --swapxy and --inverty by default.
+    This is because *usually* this is the convention change between
+    cryosparc and relion. However, your mileage may vary, so you
+    are encouraged to check you data after conversion.
 
     Note that if -p/-m are not passed, those columns are not
-    usable (due to the mrc extension and broken path)
+    usable (due to the mrc extension and broken path).
     """
     log = ['=' * 80]
 
@@ -130,8 +141,9 @@ def main(
     click.secho('Converting to star format...')
     for f, p in zip(particles, passthrough_files):
         data = np.load(f)
-        df_part = pyem.metadata.parse_cryosparc_2_cs(data, passthroughs=p,
-                                                     minphic=0, boxsize=None, swapxy=swapxy)
+        df_part = pyem.metadata.parse_cryosparc_2_cs(
+            data, passthroughs=p,
+            minphic=0, boxsize=None, swapxy=swapxy, invertx=invertx, inverty=inverty)
         df = df.append(df_part, ignore_index=True)
 
     if classes is not None:
@@ -208,7 +220,3 @@ def main(
         f.write(f'{header}\n{command}\n{log}\n')
 
     click.secho('Done!')
-
-
-if __name__ == '__main__':
-    main()
