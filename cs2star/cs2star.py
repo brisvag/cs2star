@@ -2,15 +2,8 @@
 cs2star: Copy and convert a cryosparc dir into a relion dir
 """
 
-import sys
-import shutil
-from pathlib import Path
-import re
 
-import pandas as pd
-import numpy as np
 import click
-import pyem
 
 
 @click.command(context_settings=dict(help_option_names=['-h', '--help'], show_default=True))
@@ -18,7 +11,8 @@ import pyem
 @click.argument('dest_dir', required=False, default='.', type=click.Path(file_okay=False))
 @click.option('-f', '--overwrite', count=True, help='overwrite the existing destination directory if present.'
               'Passed once, overwrite star file only. Twice, also files/symlinks')
-@click.option('-d', '--dry-run', is_flag=True)
+@click.option('-d', '--dry-run', is_flag=True,
+              help='do not perform the command, simply check inputs and show what will be done.')
 @click.option('-c/-s', '--copy/--symlink', default=False, help='copy the images or symlink to them')
 @click.option('-m', '--micrographs', is_flag=True, help='copy/link the full micrographs')
 @click.option('-p', '--patches', is_flag=True, help='copy/link the particle patches, if available')
@@ -60,7 +54,21 @@ def main(
     Note that if -p/-m are not passed, those columns are not
     usable (due to the mrc extension and broken path).
     """
-    log = ['=' * 80]
+    import sys
+    import shutil
+    from pathlib import Path
+    import re
+
+    import pandas as pd
+    import numpy as np
+    from rich.panel import Panel
+    from inspect import cleandoc
+    from rich.progress import Progress
+    from rich import print
+    try:
+        import pyem
+    except ModuleNotFoundError:
+        print('You need to install pyem for cs2star to work: https://github.com/asarnow/pyem')
 
     # get all the particle files
     job_dir = Path(job_dir)
@@ -79,7 +87,8 @@ def main(
         else:
             particles.append(f)
     if not particles:
-        click.UsageError('no usable particle positions files were found')
+        print('[red]No usable particle files were found')
+        sys.exit(1)
 
     particles.sort()
     passthroughs.sort()
@@ -102,8 +111,6 @@ def main(
                 passthroughs = filtered_passthroughs
         elif any(re.search('cryosparc_P\d+_J\d+_\d+_particles.cs', str(p)) for p in particles):
             particles = particles[-1:]
-    log.append(f'Particle files: {[str(f) for f in particles]}')
-    log.append(f'Passthrough files: {[str(f) for f in passthroughs]}')
 
     dest_dir = Path(dest_dir)
     dest_star = dest_dir / 'particles.star'
@@ -114,16 +121,22 @@ def main(
     if patches:
         dest_patches = dest_dir / 'patches'
         to_create.append(dest_patches)
-    log_file = dest_dir / 'cs2star.log'
-    log.append(f'Will create: {[str(f) for f in to_create + [dest_star]]}')
-    log.append('=' * 80)
 
-    log = '\n'.join(log)
-    click.secho(log, fg='green')
-
-    # stop here on dry run
+    log = cleandoc(f'''
+        Particle files: {', '.join(str(f) for f in particles)}
+        Passthrough files: {', '.join(str(f) for f in passthroughs)}
+        Will create: {', '.join(str(f) for f in to_create + [dest_star])}
+    ''')
     if dry_run:
+        print(Panel(log))
         sys.exit()
+    else:
+        with open(dest_dir / 'cs2star.log', 'w+') as logfile:
+            logfile.write(cleandoc(f'''
+                # this directory was converted from cryosparc with cs2star.py. Command:'
+                cs2star {" ".join(sys.argv[1:])}
+            ''' + '\n'))
+            logfile.write(log)
 
     # make dest dirs
     for d in to_create:
@@ -138,29 +151,31 @@ def main(
     else:
         passthrough_files = [passthroughs for _ in particles]
     df = pd.DataFrame()
-    click.secho('Converting to star format...')
-    for f, p in zip(particles, passthrough_files):
-        data = np.load(f)
-        df_part = pyem.metadata.parse_cryosparc_2_cs(
-            data, passthroughs=p,
-            minphic=0, boxsize=None, swapxy=swapxy, invertx=invertx, inverty=inverty)
-        df = df.append(df_part, ignore_index=True)
 
-    if classes is not None:
-        classes = classes.split(',')
-        click.secho('Selecting classes...')
-        df = pyem.star.select_classes(df, classes)
+    with Progress() as progress:
+        for f, p in progress.track(list(zip(particles, passthrough_files)), description='Loading particle data...'):
+            data = np.load(f)
+            df_part = pyem.metadata.parse_cryosparc_2_cs(
+                data, passthroughs=p,
+                minphic=0, boxsize=None, swapxy=swapxy, invertx=invertx, inverty=inverty)
+            df = pd.concat([df, df_part], ignore_index=True)
 
-    click.secho('Cleaning up data...')
-    # clean up
-    df = pyem.star.check_defaults(df, inplace=True)
-    df = pyem.star.remove_deprecated_relion2(df, inplace=True)
+        if classes is not None:
+            classes = classes.split(',')
+            print(f'selecting classes: {", ".join(classes)}')
+            df = pyem.star.select_classes(df, classes)
 
-    # symlink/copy images
-    def copy_images(paths, to_dir, copy=False):
-        exists = False
-        with click.progressbar(paths, label=f'{"Copying" if copy else "Linking"} images to {to_dir}...') as images:
-            for img in images:
+        # clean up
+        cleaning = progress.add_task('Cleaning up data...', total=2)
+        df = pyem.star.check_defaults(df, inplace=True)
+        progress.update(cleaning, advance=1)
+        df = pyem.star.remove_deprecated_relion2(df, inplace=True)
+        progress.update(cleaning, advance=1)
+
+        # symlink/copy images
+        def copy_images(paths, to_dir, label='micrographs', copy=False):
+            exists = False
+            for img in progress.track(paths, description=f'{"Copying" if copy else "Linking"} {label} to {to_dir}...'):
                 orig = job_dir.parent / img
                 # new path + add s to extension for relion
                 moved = Path(to_dir / (orig.name + 's'))
@@ -174,49 +189,49 @@ def main(
                         shutil.copy(orig, moved)
                     else:
                         moved.symlink_to(orig)
-        if exists and overwrite <= 1:
-            click.secho('INFO: some files were not symlinked/copied because they already exist.'
-                        'Use -ff to force overwrite', bg='red')
+            if exists and overwrite <= 1:
+                print('[yellow]INFO: some files were not symlinked/copied because they already exist.\n'
+                      'Use -ff to force overwrite')
 
-    def fix_path(path, new_parent):
-        """
-        replace the parent and add `s` at the end of a path
-        """
-        basename = Path(path).name
-        return str(new_parent / basename) + 's'
+        def fix_path(path, new_parent):
+            """
+            replace the parent and add `s` at the end of a path
+            """
+            basename = Path(path).name
+            return str(new_parent / basename) + 's'
 
-    dest_dir = dest_dir.absolute()  # needed because relion thinks anything is relative to its "base" directory
-    if micrographs:
-        try:
-            paths = np.unique(df['rlnMicrographName'].to_numpy())
-        except KeyError:
-            raise click.UsageError('could not find micrograph paths in the data.')
-        # change them to the copied/symlinked version
-        target_dir = dest_dir / 'micrographs'
-        df['rlnMicrographName'] = df['rlnMicrographName'].apply(fix_path, new_parent=target_dir)
+        dest_dir = dest_dir.absolute()  # needed because relion thinks anything is relative to its "base" directory
+        if micrographs:
+            fix_mg_paths = progress.add_task('Fixing micrograph paths...', start=False)
+            try:
+                paths = np.unique(df['rlnMicrographName'].to_numpy())
+            except KeyError:
+                raise click.UsageError('could not find micrograph paths in the data.')
+            # change them to the copied/symlinked version
+            target_dir = dest_dir / 'micrographs'
+            df['rlnMicrographName'] = df['rlnMicrographName'].apply(fix_path, new_parent=target_dir)
+            progress.start_task(fix_mg_paths)
+            progress.update(fix_mg_paths, completed=100)
 
-        copy_images(paths, dest_micrographs, copy)
-    if patches:
-        for col in ('rlnImageName', 'ucsfImagePath'):
-            if col in df.columns:
-                col_name = col
-                break
-        else:
-            raise click.UsageError('could not find patch paths in the data. Were the particles ever extracted?')
-        paths = np.unique(df[col_name].to_numpy())
-        # change them to the copied/symlinked version
-        target_dir = dest_dir / 'patches'
-        df[col_name] = df[col_name].apply(fix_path, new_parent=target_dir)
-        copy_images(paths, dest_patches, copy)
+            copy_images(paths, dest_micrographs, label='micrographs', copy=copy)
+        if patches:
+            for col in ('rlnImageName', 'ucsfImagePath'):
+                if col in df.columns:
+                    col_name = col
+                    break
+            else:
+                raise click.UsageError('could not find patch paths in the data. Were the particles ever extracted?')
+            fix_patch_paths = progress.add_task('Fixing micrograph paths...', start=False)
+            progress.start_task(fix_patch_paths)
+            paths = np.unique(df[col_name].to_numpy())
+            # change them to the copied/symlinked version
+            target_dir = dest_dir / 'patches'
+            df[col_name] = df[col_name].apply(fix_path, new_parent=target_dir)
+            progress.update(fix_patch_paths, completed=100)
+            copy_images(paths, dest_patches, label='patches', copy=copy)
 
-    click.secho('Writing star file...')
-    # write to file
-    pyem.star.write_star(str(dest_star), df, resort_records=True, optics=True)
-
-    # write log
-    header = '# this directory was converted from cryosparc with cs2star.py. Command:'
-    command = " ".join(sys.argv)
-    with open(log_file, 'w+') as f:
-        f.write(f'{header}\n{command}\n{log}\n')
-
-    click.secho('Done!')
+        writing = progress.add_task('Writing star file...', start=False)
+        # write to file
+        pyem.star.write_star(str(dest_star), df, resort_records=True, optics=True)
+        progress.start_task(writing)
+        progress.update(writing, completed=100)
