@@ -42,4 +42,4 @@ You can now run `relion` and provide `particles.star` as the input.
 ## Tips
 
 - While you can use the `--class` option to select specific classes from a cryosparc job, the class indexes do not correspond the the class order in Cryosparc (which is simply based on particle number). A much easier way to select specific classes to convert to `.star` is to use the `select 2D classes` job in cryosparc, then provide this job as input to cs2star.
-- `--swapxy` and `--inverty` default to `True`. This is because *usually* that's what you need; unfortunately, this may differ on a case by case basis, so make sure to check the data after conversion with you favourite viewer to ensure that particles are correctly centered.
+- `--swapxy` defaults to `True`. This is because *usually* that's what you need; unfortunately, this may differ on a case by case basis, so make sure to check the data after conversion with you favourite viewer to ensure that particles are correctly centered.

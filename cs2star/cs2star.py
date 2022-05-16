@@ -19,7 +19,7 @@ import click
 @click.option('--sets', help='only use these sets (only used if job is Particle Sets Tool). Comma-separated list.')
 @click.option('--classes', help='only use particles from these classes. Comma-separated list.')
 @click.option('--swapxy/--no-swapxy', default=True, help='swap x and y axes')
-@click.option('--inverty/--no-inverty', default=True, help='invert y axis')
+@click.option('--inverty/--no-inverty', default=False, help='invert y axis')
 @click.option('--invertx/--no-invertx', default=False, help='invert x axis')
 def main(
     job_dir,
@@ -46,7 +46,7 @@ def main(
     DEST_DIR:
         the destination directory. [default: '.']
 
-    WARNING! This script will use --swapxy and --inverty by default.
+    WARNING! This script will use --swapxy by default.
     This is because *usually* this is the convention change between
     cryosparc and relion. However, your mileage may vary, so you
     are encouraged to check you data after conversion.
@@ -191,7 +191,7 @@ def main(
                         moved.symlink_to(orig)
             if exists and overwrite <= 1:
                 print('[yellow]INFO: some files were not symlinked/copied because they already exist.\n'
-                      'Use -ff to force overwrite')
+                      'Use -ff to force overwrite.')
 
         def fix_path(path, new_parent):
             """
