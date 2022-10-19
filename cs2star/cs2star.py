@@ -16,7 +16,7 @@ import click
 @click.option('-c/-s', '--copy/--symlink', default=False, help='copy the images or symlink to them')
 @click.option('-m', '--micrographs', is_flag=True, help='copy/link the full micrographs')
 @click.option('-p', '--patches', is_flag=True, help='copy/link the particle patches, if available')
-@click.option('--sets', help='only use these sets (only used if job is Particle Sets Tool). Comma-separated list.')
+@click.option('--sets', type=str, help='only use these sets (only used if job is Particle Sets Tool). Comma-separated list.')
 @click.option('--classes', help='only use particles from these classes. Comma-separated list.')
 @click.option('--swapxy/--no-swapxy', default=True, help='swap x and y axes')
 @click.option('--inverty/--no-inverty', default=False, help='invert y axis')
@@ -57,7 +57,6 @@ def main(
     import sys
     import shutil
     from pathlib import Path
-    import re
 
     import pandas as pd
     import numpy as np
@@ -70,47 +69,18 @@ def main(
     except ModuleNotFoundError:
         print('You need to install pyem for cs2star to work: https://github.com/asarnow/pyem')
 
+    from .job_parser import find_cs_files
+
+    sets = sets.split(',') if sets is not None else None
     # get all the particle files
-    job_dir = Path(job_dir)
-    particles = []
-    passthroughs = []
-    for f in job_dir.iterdir():
-        name = f.name
-        if not name.endswith('.cs'):
-            continue
-        if 'particles' not in name and 'split_' not in name:
-            continue
-        if any(s in name for s in ('excluded', 'remainder', 'rejected', 'uncategorized')):
-            continue
-        if 'passthrough' in str(f):
-            passthroughs.append(f)
-        else:
-            particles.append(f)
+    job_files = find_cs_files(job_dir, sets=sets)
+
+    particles = sorted(job_files['cs'])
     if not particles:
         print('[red]No usable particle files were found')
         sys.exit(1)
 
-    particles.sort()
-    passthroughs.sort()
-    # distinguish job types
-    split_job = False
-    if len(particles) != 1:
-        if any('split_' in str(p) for p in particles):
-            split_job = True
-            # select sets
-            if sets is not None:
-                sets = [int(i) for i in sets.split(',')]
-                filtered_particles = []
-                filtered_passthroughs = []
-                for prt, pst in zip(particles, passthroughs):
-                    set_id = int(re.search('split_(\d+)', str(prt)).group(1))
-                    if set_id in sets:
-                        filtered_particles.append(prt)
-                        filtered_passthroughs.append(pst)
-                particles = filtered_particles
-                passthroughs = filtered_passthroughs
-        elif any(re.search('cryosparc_P\d+_J\d+_\d+_particles.cs', str(p)) for p in particles):
-            particles = particles[-1:]
+    passthroughs = sorted(job_files['passthrough'])
 
     dest_dir = Path(dest_dir)
     dest_star = dest_dir / 'particles.star'
@@ -123,8 +93,10 @@ def main(
         to_create.append(dest_patches)
 
     log = cleandoc(f'''
-        Particle files: {', '.join(str(f) for f in particles)}
-        Passthrough files: {', '.join(str(f) for f in passthroughs)}
+        Particle files:
+        {', '.join(str(f) for f in particles)}
+        Passthrough files:
+        {', '.join(str(f) for f in passthroughs)}
         Will create: {', '.join(str(f) for f in to_create + [dest_star])}
     ''')
     if dry_run:
@@ -135,8 +107,14 @@ def main(
             logfile.write(cleandoc(f'''
                 # this directory was converted from cryosparc with cs2star.py. Command:'
                 cs2star {" ".join(sys.argv[1:])}
-            ''' + '\n'))
+            ''') + '\n')
             logfile.write(log)
+
+    if len(particles) != len(passthroughs):
+        if len(passthroughs) == 1:
+            passthroughs = passthroughs * len(particles)
+        else:
+            raise ValueError('Number of passthrough files and particle files is incompatible')
 
     # make dest dirs
     for d in to_create:
@@ -144,19 +122,13 @@ def main(
     if dest_star.is_file() and overwrite == 0:
         raise click.UsageError('particle file already exists. To overwrite, use -f')
 
-    # convert positions
-    passthroughs = [str(f) for f in passthroughs]
-    if split_job:
-        passthrough_files = [[p] for p in passthroughs]
-    else:
-        passthrough_files = [passthroughs for _ in particles]
     df = pd.DataFrame()
 
     with Progress() as progress:
-        for f, p in progress.track(list(zip(particles, passthrough_files)), description='Loading particle data...'):
+        for f, p in progress.track(list(zip(particles, passthroughs)), description='Loading particle data...'):
             data = np.load(f)
             df_part = pyem.metadata.parse_cryosparc_2_cs(
-                data, passthroughs=p,
+                data, passthroughs=[p],
                 minphic=0, boxsize=None, swapxy=swapxy, invertx=invertx, inverty=inverty)
             df = pd.concat([df, df_part], ignore_index=True)
 
