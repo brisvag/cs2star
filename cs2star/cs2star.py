@@ -73,6 +73,7 @@ def main(
 
     sets = sets.split(',') if sets is not None else None
     # get all the particle files
+    job_dir = Path(job_dir)
     job_files = find_cs_files(job_dir, sets=sets)
 
     particles = sorted(job_files['cs'])
