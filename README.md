@@ -36,8 +36,9 @@ cs2star Cryosparc/J23 -p
 
 will create in the working directory:
 - a relion-ready `particles.star`
+- a relion-ready `micrographs.star`
 - a `patches` directory containing the particle images to be used by relion refinement
-You can now run `relion` and provide `particles.star` as the input.
+You can now run `relion` and provide `particles.star` and `micrographs.star` as the inputs.
 
 ## Tips
 
