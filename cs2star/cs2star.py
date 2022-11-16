@@ -85,6 +85,7 @@ def main(
 
     dest_dir = Path(dest_dir)
     dest_star = dest_dir / 'particles.star'
+    dest_mic_star = dest_dir / 'micrographs.star'
     to_create = [dest_dir]
     if micrographs:
         dest_micrographs = dest_dir / 'micrographs'
@@ -98,7 +99,7 @@ def main(
         {', '.join(str(f) for f in particles)}
         Passthrough files:
         {', '.join(str(f) for f in passthroughs)}
-        Will create: {', '.join(str(f) for f in to_create + [dest_star])}
+        Will create: {', '.join(str(f) for f in to_create + [dest_star, dest_mic_star])}
     ''')
     if dry_run:
         print(Panel(log))
@@ -122,6 +123,8 @@ def main(
         d.mkdir(parents=True, exist_ok=True)
     if dest_star.is_file() and overwrite == 0:
         raise click.UsageError('particle file already exists. To overwrite, use -f')
+    if dest_star.is_file() and overwrite == 0:
+        raise click.UsageError('micrographs file already exists. To overwrite, use -f')
 
     df = pd.DataFrame()
 
@@ -146,12 +149,12 @@ def main(
         progress.update(cleaning, advance=1)
 
         # symlink/copy images
-        def copy_images(paths, to_dir, label='micrographs', copy=False):
+        def copy_images(paths, to_dir, label='micrographs', copy=False, add_s=False):
             exists = False
             for img in progress.track(paths, description=f'{"Copying" if copy else "Linking"} {label} to {to_dir}...'):
                 orig = job_dir.parent / img
                 # new path + add s to extension for relion
-                moved = Path(to_dir / (orig.name + 's'))
+                moved = Path(to_dir / (orig.name + ('s' if add_s else '')))
                 if moved.is_file() and overwrite <= 1:
                     exists = True
                     continue
@@ -166,12 +169,22 @@ def main(
                 print('[yellow]INFO: some files were not symlinked/copied because they already exist.\n'
                       'Use -ff to force overwrite.')
 
-        def fix_path(path, new_parent):
+        def fix_path(path, new_parent, add_s=False):
             """
             replace the parent and add `s` at the end of a path
             """
             basename = Path(path).name
-            return str(new_parent / basename) + 's'
+            return str(new_parent / basename) + ('s' if add_s else '')
+
+        def uniq(df, invert=False):
+            for col in df.columns:
+                if len(df[col].unique()) != 1:
+                    df.drop(col, inplace=True, axis=1)
+            return df
+
+        def keep_only_micrograph_info(df):
+            unique = df.groupby('rlnMicrographName', group_keys=False).apply(uniq)
+            return unique.dropna(axis=1).drop_duplicates()
 
         dest_dir = dest_dir.absolute()  # needed because relion thinks anything is relative to its "base" directory
         if micrographs:
@@ -199,12 +212,16 @@ def main(
             paths = np.unique(df[col_name].to_numpy())
             # change them to the copied/symlinked version
             target_dir = dest_dir / 'patches'
-            df[col_name] = df[col_name].apply(fix_path, new_parent=target_dir)
+            df[col_name] = df[col_name].apply(fix_path, new_parent=target_dir, add_s=True)
             progress.update(fix_patch_paths, completed=100)
-            copy_images(paths, dest_patches, label='patches', copy=copy)
+            copy_images(paths, dest_patches, label='patches', copy=copy, add_s=True)
 
-        writing = progress.add_task('Writing star file...', start=False)
+        df_mics = keep_only_micrograph_info(df)
+
+        writing = progress.add_task('Writing star files...', start=False, total=len(df.index) + len(df_mics.index))
         # write to file
-        pyem.star.write_star(str(dest_star), df, resort_records=True, optics=True)
         progress.start_task(writing)
-        progress.update(writing, completed=100)
+        pyem.star.write_star(str(dest_star), df, resort_records=True, optics=True)
+        progress.update(writing, advance=len(df.index))
+        pyem.star.write_star(str(dest_mic_star), df_mics, resort_records=True, optics=True)
+        progress.update(writing, advance=len(df_mics.index))
