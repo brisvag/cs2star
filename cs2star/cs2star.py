@@ -76,12 +76,14 @@ def main(
     job_dir = Path(job_dir)
     job_files = find_cs_files(job_dir, sets=sets)
 
-    particles = sorted(job_files['cs'])
+    particles = sorted(job_files['particles']['cs'])
     if not particles:
         print('[red]No usable particle files were found')
         sys.exit(1)
 
-    passthroughs = sorted(job_files['passthrough'])
+    particles_passthrough = sorted(job_files['particles']['passthrough'])
+    micrographs = sorted(job_files['micrographs']['cs'])
+    micrographs_passthrough = sorted(job_files['micrographs']['passthrough'])
 
     dest_dir = Path(dest_dir)
     dest_star = dest_dir / 'particles.star'
@@ -97,8 +99,12 @@ def main(
     log = cleandoc(f'''
         Particle files:
         {', '.join(str(f) for f in particles)}
-        Passthrough files:
-        {', '.join(str(f) for f in passthroughs)}
+        Particle Passthrough files:
+        {', '.join(str(f) for f in particles_passthrough)}
+        Micrograph files:
+        {', '.join(str(f) for f in micrographs)}
+        Micrograph Passthrough files:
+        {', '.join(str(f) for f in micrographs_passthrough)}
         Will create: {', '.join(str(f) for f in to_create + [dest_star, dest_mic_star])}
     ''')
     if dry_run:
@@ -107,14 +113,20 @@ def main(
     else:
         with open(dest_dir / 'cs2star.log', 'w+') as logfile:
             logfile.write(cleandoc(f'''
-                # this directory was converted from cryosparc with cs2star.py. Command:'
+                # this directory was converted from cryosparc with cs2star.py. Command:
                 cs2star {" ".join(sys.argv[1:])}
             ''') + '\n')
             logfile.write(log)
 
-    if len(particles) != len(passthroughs):
-        if len(passthroughs) == 1:
-            passthroughs = passthroughs * len(particles)
+    if len(particles) != len(particles_passthrough):
+        if len(particles_passthrough) == 1:
+            particles_passthrough = particles_passthrough * len(particles)
+        else:
+            raise ValueError('Number of passthrough files and particle files is incompatible')
+
+    if len(micrographs) != len(micrographs_passthrough):
+        if len(micrographs_passthrough) == 1:
+            micrographs_passthroughs = micrographs_passthrough * len(micrographs)
         else:
             raise ValueError('Number of passthrough files and particle files is incompatible')
 
@@ -126,26 +138,41 @@ def main(
     if dest_star.is_file() and overwrite == 0:
         raise click.UsageError('micrographs file already exists. To overwrite, use -f')
 
-    df = pd.DataFrame()
-
     with Progress() as progress:
-        for f, p in progress.track(list(zip(particles, passthroughs)), description='Loading particle data...'):
+
+        df_part = pd.DataFrame()
+        for f, p in progress.track(list(zip(particles, particles_passthrough)), description='Loading particle data...'):
             data = np.load(f)
-            df_part = pyem.metadata.parse_cryosparc_2_cs(
+            df_part_i = pyem.metadata.parse_cryosparc_2_cs(
                 data, passthroughs=[p],
                 minphic=0, boxsize=None, swapxy=swapxy, invertx=invertx, inverty=inverty)
-            df = pd.concat([df, df_part], ignore_index=True)
+            df_part = pd.concat([df_part, df_part_i], ignore_index=True)
 
         if classes is not None:
             classes = classes.split(',')
             print(f'selecting classes: {", ".join(classes)}')
-            df = pyem.star.select_classes(df, classes)
+            df_part = pyem.star.select_classes(df_part, classes)
+
+        df_mic = pd.DataFrame()
+        for f, p in progress.track(list(zip(micrographs, micrographs_passthrough)), description='Loading micrograph data...'):
+            data = np.load(f)
+            df_mic_i = pyem.metadata.parse_cryosparc_2_cs(
+                data, passthroughs=[p],
+                minphic=0, boxsize=None, swapxy=swapxy, invertx=invertx, inverty=inverty)
+            df_mic = pd.concat([df_mic, df_mic_i], ignore_index=True)
 
         # clean up
         cleaning = progress.add_task('Cleaning up data...', total=2)
-        df = pyem.star.check_defaults(df, inplace=True)
+        df_part = pyem.star.check_defaults(df_part, inplace=True)
         progress.update(cleaning, advance=1)
-        df = pyem.star.remove_deprecated_relion2(df, inplace=True)
+        df_part = pyem.star.remove_deprecated_relion2(df_part, inplace=True)
+        progress.update(cleaning, advance=1)
+
+        # clean up
+        cleaning = progress.add_task('Cleaning up data...', total=2)
+        df_mic = pyem.star.check_defaults(df_mic, inplace=True)
+        progress.update(cleaning, advance=1)
+        df_mic = pyem.star.remove_deprecated_relion2(df_mic, inplace=True)
         progress.update(cleaning, advance=1)
 
         # symlink/copy images
@@ -187,41 +214,40 @@ def main(
             return unique.dropna(axis=1).drop_duplicates()
 
         dest_dir = dest_dir.absolute()  # needed because relion thinks anything is relative to its "base" directory
+
         if micrographs:
             fix_mg_paths = progress.add_task('Fixing micrograph paths...', start=False)
             try:
-                paths = np.unique(df['rlnMicrographName'].to_numpy())
+                paths = np.unique(df_part['rlnMicrographName'].to_numpy())
             except KeyError:
                 raise click.UsageError('could not find micrograph paths in the data.')
             # change them to the copied/symlinked version
             target_dir = dest_dir / 'micrographs'
-            df['rlnMicrographName'] = df['rlnMicrographName'].apply(fix_path, new_parent=target_dir)
+            df_part['rlnMicrographName'] = df_part['rlnMicrographName'].apply(fix_path, new_parent=target_dir)
             progress.start_task(fix_mg_paths)
             progress.update(fix_mg_paths, completed=100)
 
             copy_images(paths, dest_micrographs, label='micrographs', copy=copy)
         if patches:
             for col in ('rlnImageName', 'ucsfImagePath'):
-                if col in df.columns:
+                if col in df_part.columns:
                     col_name = col
                     break
             else:
                 raise click.UsageError('could not find patch paths in the data. Were the particles ever extracted?')
             fix_patch_paths = progress.add_task('Fixing micrograph paths...', start=False)
             progress.start_task(fix_patch_paths)
-            paths = np.unique(df[col_name].to_numpy())
+            paths = np.unique(df_part[col_name].to_numpy())
             # change them to the copied/symlinked version
             target_dir = dest_dir / 'patches'
-            df[col_name] = df[col_name].apply(fix_path, new_parent=target_dir, add_s=True)
+            df_part[col_name] = df_part[col_name].apply(fix_path, new_parent=target_dir, add_s=True)
             progress.update(fix_patch_paths, completed=100)
             copy_images(paths, dest_patches, label='patches', copy=copy, add_s=True)
 
-        df_mics = keep_only_micrograph_info(df)
-
-        writing = progress.add_task('Writing star files...', start=False, total=len(df.index) + len(df_mics.index))
+        writing = progress.add_task('Writing star files...', start=False, total=len(df_part.index) + len(df_mic.index))
         # write to file
         progress.start_task(writing)
-        pyem.star.write_star(str(dest_star), df, resort_records=True, optics=True)
-        progress.update(writing, advance=len(df.index))
-        pyem.star.write_star(str(dest_mic_star), df_mics, resort_records=True, optics=True)
-        progress.update(writing, advance=len(df_mics.index))
+        pyem.star.write_star(str(dest_star), df_part, resort_records=True, optics=True)
+        progress.update(writing, advance=len(df_part.index))
+        pyem.star.write_star(str(dest_mic_star), df_mic, resort_records=True, optics=True)
+        progress.update(writing, advance=len(df_mic.index))
