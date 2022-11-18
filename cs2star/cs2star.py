@@ -126,7 +126,7 @@ def main(
 
     if len(micrographs) != len(micrographs_passthrough):
         if len(micrographs_passthrough) == 1:
-            micrographs_passthroughs = micrographs_passthrough * len(micrographs)
+            micrographs_passthrough = micrographs_passthrough * len(micrographs)
         else:
             raise ValueError('Number of passthrough files and particle files is incompatible')
 
