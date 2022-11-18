@@ -203,16 +203,6 @@ def main(
             basename = Path(path).name
             return str(new_parent / basename) + ('s' if add_s else '')
 
-        def uniq(df, invert=False):
-            for col in df.columns:
-                if len(df[col].unique()) != 1:
-                    df.drop(col, inplace=True, axis=1)
-            return df
-
-        def keep_only_micrograph_info(df):
-            unique = df.groupby('rlnMicrographName', group_keys=False).apply(uniq)
-            return unique.dropna(axis=1).drop_duplicates()
-
         dest_dir = dest_dir.absolute()  # needed because relion thinks anything is relative to its "base" directory
 
         if micrographs:
