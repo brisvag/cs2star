@@ -8,3 +8,27 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
 write_to = "cs2star/_version.py"
+
+[project]
+name = "cs2star"
+license = {text = "GNU General Public License v3 (GPLv3)"}
+description = "A simple utility to convert cryosparc particle positions to relion star format."
+readme = "README.md"
+authors = [{name = "Lorenzo Gaifas", email = "brisvag@gmail.com"}]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python",
+]
+urls = {Homepage = "https://github.com/brisvag/cs2star/"}
+requires-python = ">= 3.8"
+dependencies = [
+    "pandas",
+    "click",
+    "numpy",
+    "rich",
+]
+dynamic = ["version"]
+
+[project.scripts]
+cs2star = "cs2star.cs2star:main"
