@@ -111,6 +111,9 @@ def main(
         print(Panel(log))
         sys.exit()
     else:
+        # make dest dirs
+        for d in to_create:
+            d.mkdir(parents=True, exist_ok=True)
         with open(dest_dir / 'cs2star.log', 'w+') as logfile:
             logfile.write(cleandoc(f'''
                 # this directory was converted from cryosparc with cs2star.py. Command:
@@ -130,9 +133,6 @@ def main(
         else:
             raise ValueError('Number of passthrough files and particle files is incompatible')
 
-    # make dest dirs
-    for d in to_create:
-        d.mkdir(parents=True, exist_ok=True)
     if dest_star.is_file() and overwrite == 0:
         raise click.UsageError('particle file already exists. To overwrite, use -f')
     if dest_star.is_file() and overwrite == 0:
