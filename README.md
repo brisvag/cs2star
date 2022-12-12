@@ -4,12 +4,10 @@ A simple utility that wraps around `csparc2star.py` to convert particle position
 
 # Installation
 
-This package requires [pyem](https://github.com/asarnow/pyem), which is not available on pip under that name (there is a pyem on pip; that's a different package!). To install it manually:
+This package requires [pyem](https://github.com/asarnow/pyem), which is not available on pip under that name (there is a pyem on pip; that's a different package!). To install it manually [_NOTE: some fixes necessary for this are not yet on the main repo, so we're installing from a fork_]:
 
 ```bash
-git clone https://github.com/asarnow/pyem.git
-cd pyem
-pip install -e .
+pip install git+https://github.com/brisvag/pyem.git
 ```
 
 You can then install `cs2star` with pip:
