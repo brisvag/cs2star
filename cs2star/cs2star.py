@@ -67,7 +67,9 @@ def main(
     try:
         import pyem
     except ModuleNotFoundError:
-        print('You need to install pyem for cs2star to work: https://github.com/asarnow/pyem')
+        print('You need to install pyem for cs2star to work:')
+        print('  pip install git+https://github.com/brisvag/pyem.git')
+        sys.exit(1)
 
     from .job_parser import find_cs_files
 
