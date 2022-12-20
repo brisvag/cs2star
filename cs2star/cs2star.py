@@ -227,7 +227,7 @@ def main(
                     break
             else:
                 raise click.UsageError('could not find patch paths in the data. Were the particles ever extracted?')
-            fix_patch_paths = progress.add_task('Fixing micrograph paths...', start=False)
+            fix_patch_paths = progress.add_task('Fixing patches paths...', start=False)
             progress.start_task(fix_patch_paths)
             paths = np.unique(df_part[col_name].to_numpy())
             # change them to the copied/symlinked version
