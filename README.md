@@ -1,6 +1,6 @@
 # cs2star
 
-A simple utility that wraps around `csparc2star.py` to convert particle positions from Cryosparc JOB directories into a RELION-ready directory. On top of what `csparc2star.py` already does, this script automatically symlinks (or copies) the `.mrc` files, renaming them as appropriate to `mrcs` and updating the `rlnMicrographName` column to reflect the change.
+A simple utility that wraps around `csparc2star.py` to convert particle positions from Cryosparc JOB directories into a RELION-ready directory. On top of what `csparc2star.py` already does, this script will traverse the Cryosparc job tree to find the relevant `.cs` files, automatically symlinks (or copies) the `.mrc` files (renaming them as appropriate to `mrcs` and updating the `rlnMicrographName` column to reflect the change). `cs2star` also separates micrograph information in a `micrographs.star` file, which is required in several relion jobs.
 
 # Installation
 
