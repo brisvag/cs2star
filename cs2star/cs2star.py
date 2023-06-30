@@ -124,23 +124,27 @@ def main(
             logfile.write(log)
 
     if len(particles) != len(particles_passthrough):
+        if len(particles_passthrough) == 0:
+            pass
         if len(particles_passthrough) == 1:
             particles_passthrough = particles_passthrough * len(particles)
         else:
             raise ValueError(
                 'Number of passthrough files and particle files is incompatible:\n'
-                f'particles: {particles_passthrough}\n'
+                f'particles: {particles}\n'
                 f'passthroughs: {particles_passthrough}'
             )
 
     if len(micrographs) != len(micrographs_passthrough):
+        if len(micrographs_passthrough) == 0:
+            pass
         if len(micrographs_passthrough) == 1:
             micrographs_passthrough = micrographs_passthrough * len(micrographs)
         else:
             raise ValueError(
                 'Number of passthrough files and micrographs files is incompatible:\n'
-                f'micrographs: {particles_passthrough}\n'
-                f'passthroughs: {particles_passthrough}'
+                f'micrographs: {micrographs}\n'
+                f'passthroughs: {micrographs_passthrough}'
             )
 
     if dest_star.is_file() and overwrite == 0:
