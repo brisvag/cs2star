@@ -126,7 +126,7 @@ def main(
     if len(particles) != len(particles_passthrough):
         if len(particles_passthrough) == 0:
             pass
-        if len(particles_passthrough) == 1:
+        elif len(particles_passthrough) == 1:
             particles_passthrough = particles_passthrough * len(particles)
         else:
             raise ValueError(
@@ -138,7 +138,7 @@ def main(
     if len(micrographs) != len(micrographs_passthrough):
         if len(micrographs_passthrough) == 0:
             pass
-        if len(micrographs_passthrough) == 1:
+        elif len(micrographs_passthrough) == 1:
             micrographs_passthrough = micrographs_passthrough * len(micrographs)
         else:
             raise ValueError(
