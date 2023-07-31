@@ -170,9 +170,9 @@ def main(
         df_mic = pd.DataFrame()
         for f, p in progress.track(list(zip(micrographs, micrographs_passthrough)), description='Loading micrograph data...'):
             data = np.load(f)
-            df_mic_i = pyem.metadata.parse_cryosparc_2_cs(
-                data, passthroughs=[p],
-                minphic=0, boxsize=None, swapxy=swapxy, invertx=invertx, inverty=inverty)
+            df_mic_i = pyem.metadata.cryosparc_2_cs_movie_parameters(
+                data, passthroughs=[p], trajdir=str(f.parent.parent),
+            )
             df_mic = pd.concat([df_mic, df_mic_i], ignore_index=True)
 
         # clean up
