@@ -176,14 +176,14 @@ def main(
             df_mic = pd.concat([df_mic, df_mic_i], ignore_index=True)
 
         # clean up
-        cleaning = progress.add_task('Cleaning up data...', total=2)
+        cleaning = progress.add_task('Cleaning up particle data...', total=2)
         df_part = pyem.star.check_defaults(df_part, inplace=True)
         progress.update(cleaning, advance=1)
         df_part = pyem.star.remove_deprecated_relion2(df_part, inplace=True)
         progress.update(cleaning, advance=1)
 
         # clean up
-        cleaning = progress.add_task('Cleaning up data...', total=3)
+        cleaning = progress.add_task('Cleaning up micrograph data...', total=3)
         # also, optics are changed to 1-based indexing by pyem in parse_cryosparc_2_cs so we match it
         # and we do it before the opticgroupname is generated from it
         df_mic['rlnOpticsGroup'] += 1
@@ -236,8 +236,9 @@ def main(
                 raise click.UsageError('could not find micrograph paths in the data.')
             # change them to the copied/symlinked version
             target_dir = dest_dir / 'micrographs'
-            df_part['rlnMicrographName'] = df_part['rlnMicrographName'].apply(fix_path, new_parent=target_dir)
             progress.start_task(fix_mg_paths)
+            df_part['rlnMicrographName'] = df_part['rlnMicrographName'].apply(fix_path, new_parent=target_dir)
+            df_mic['rlnMicrographName'] = df_mic['rlnMicrographName'].apply(fix_path, new_parent=target_dir)
             progress.update(fix_mg_paths, completed=100)
 
             copy_images(paths, dest_micrographs, label='micrographs', copy=copy)
@@ -248,7 +249,7 @@ def main(
                     break
             else:
                 raise click.UsageError('could not find patch paths in the data. Were the particles ever extracted?')
-            fix_patch_paths = progress.add_task('Fixing patches paths...', start=False)
+            fix_patch_paths = progress.add_task('Fixing particle paths...', start=False)
             progress.start_task(fix_patch_paths)
             paths = np.unique(df_part[col_name].to_numpy())
             # change them to the copied/symlinked version
