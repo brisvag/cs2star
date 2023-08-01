@@ -183,19 +183,20 @@ def main(
         progress.update(cleaning, advance=1)
 
         # clean up
-        cleaning = progress.add_task('Cleaning up data...', total=2)
+        cleaning = progress.add_task('Cleaning up data...', total=3)
+        # also, optics are changed to 1-based indexing by pyem in parse_cryosparc_2_cs so we match it
+        # and we do it before the opticgroupname is generated from it
+        df_mic['rlnOpticsGroup'] += 1
         df_mic = pyem.star.check_defaults(df_mic, inplace=True)
         progress.update(cleaning, advance=1)
         df_mic = pyem.star.remove_deprecated_relion2(df_mic, inplace=True)
         progress.update(cleaning, advance=1)
-
         # need to fix the micrographs optics because pyem is missing some things that relion wants
-        # also, optics are changed to 1-based indexing by pyem in parse_cryosparc_2_cs!!
-        df_mic['rlnOpticsGroup'] += 1
         optics = ['rlnOpticsGroup'] + [head for head in ('rlnVoltage', 'rlnSphericalAberration') if head in df_part and head not in df_mic]
         opt = df_part.get(optics).drop_duplicates()
         df_mic = df_mic.loc[:, ~df_mic.columns.duplicated()]
         df_mic = df_mic.merge(opt, on='rlnOpticsGroup')
+        progress.update(cleaning, advance=1)
 
         # symlink/copy images
         def copy_images(paths, to_dir, label='micrographs', copy=False, add_s=False):
