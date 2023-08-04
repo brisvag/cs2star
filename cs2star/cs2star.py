@@ -84,7 +84,7 @@ def main(
         sys.exit(1)
 
     particles_passthrough = sorted(job_files['particles']['passthrough'])
-    micrographs = sorted(job_files['micrographs']['cs'])
+    mic_files = sorted(job_files['micrographs']['cs'])
     micrographs_passthrough = sorted(job_files['micrographs']['passthrough'])
 
     dest_dir = Path(dest_dir)
@@ -104,7 +104,7 @@ def main(
         Particle Passthrough files:
         {', '.join(str(f) for f in particles_passthrough)}
         Micrograph files:
-        {', '.join(str(f) for f in micrographs)}
+        {', '.join(str(f) for f in mic_files)}
         Micrograph Passthrough files:
         {', '.join(str(f) for f in micrographs_passthrough)}
         Will create: {', '.join(str(f) for f in to_create + [dest_star, dest_mic_star])}
@@ -135,15 +135,15 @@ def main(
                 f'passthroughs: {particles_passthrough}'
             )
 
-    if len(micrographs) != len(micrographs_passthrough):
+    if len(mic_files) != len(micrographs_passthrough):
         if len(micrographs_passthrough) == 0:
             pass
         elif len(micrographs_passthrough) == 1:
-            micrographs_passthrough = micrographs_passthrough * len(micrographs)
+            micrographs_passthrough = micrographs_passthrough * len(mic_files)
         else:
             raise ValueError(
                 'Number of passthrough files and micrographs files is incompatible:\n'
-                f'micrographs: {micrographs}\n'
+                f'micrographs: {mic_files}\n'
                 f'passthroughs: {micrographs_passthrough}'
             )
 
@@ -168,7 +168,7 @@ def main(
             df_part = pyem.star.select_classes(df_part, classes)
 
         df_mic = pd.DataFrame()
-        for f, p in progress.track(list(zip(micrographs, micrographs_passthrough)), description='Loading micrograph data...'):
+        for f, p in progress.track(list(zip(mic_files, micrographs_passthrough)), description='Loading micrograph data...'):
             data = np.load(f)
             df_mic_i = pyem.metadata.cryosparc_2_cs_movie_parameters(
                 data, passthroughs=[p], trajdir=str(f.parent.parent),

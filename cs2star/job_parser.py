@@ -47,8 +47,8 @@ def find_cs_files(job_dir, sets=None, visited=None):
         metafiles = output['metafiles']
         passthrough = output['passthrough']
         k2 = 'passthrough' if passthrough else 'cs'
-        if j_type == 'hetero_refine':
-            # hetero refine is special because the "good" output is split into multiple files
+        if j_type in ('hetero_refine', 'homo_abinit', 'class_3D'):
+            # refine is special because the "good" output is split into multiple files
             if (not passthrough and 'particles_class_' in output['group_name']) or (passthrough and output['group_name'] == 'particles_all_classes'):
                 files['particles'][k2].add(job_dir.parent / metafiles[-1])
         elif j_type == 'particle_sets':
@@ -58,7 +58,7 @@ def find_cs_files(job_dir, sets=None, visited=None):
         else:
             # every remaining job type is covered by this generic loop
             for file in metafiles:
-                if any(bad in file for bad in ('excluded', 'incomplete', 'remainder', 'rejected', 'uncategorized')):
+                if any(bad in file for bad in ('excluded', 'incomplete', 'remainder', 'rejected', 'uncategorized', 'unused')):
                     continue
                 if 'particles' in file:
                     k1 = 'particles'
