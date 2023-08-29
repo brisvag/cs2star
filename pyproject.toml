@@ -62,7 +62,7 @@ sources = ["src"]
 
 # https://github.com/charliermarsh/ruff
 [tool.ruff]
-line-length = 88
+line-length = 120
 target-version = "py38"
 src = ["src"]
 # https://beta.ruff.rs/docs/rules/
