@@ -1,34 +1,150 @@
+# https://peps.python.org/pep-0517/
 [build-system]
-requires = [
-    "setuptools>=42",
-    "wheel",
-    "setuptools_scm[toml]>=3.4"
-]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
 
-[tool.setuptools_scm]
-write_to = "cs2star/_version.py"
-
+# https://peps.python.org/pep-0621/
 [project]
 name = "cs2star"
-license = {text = "GNU General Public License v3 (GPLv3)"}
 description = "A simple utility to convert cryosparc particle positions to relion star format."
 readme = "README.md"
-authors = [{name = "Lorenzo Gaifas", email = "brisvag@gmail.com"}]
-classifiers = [
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: BSD License",
-    "Programming Language :: Python",
+requires-python = ">=3.8"
+license = { text = "GPLv3" }
+authors = [
+    { email = "brisvag@gmail.com", name = "Lorenzo Gaifas" },
 ]
-urls = {Homepage = "https://github.com/brisvag/cs2star/"}
-requires-python = ">= 3.8"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Typing :: Typed",
+]
+dynamic = ["version"]
 dependencies = [
     "pandas",
     "click",
     "numpy",
     "rich",
 ]
-dynamic = ["version"]
 
+# extras
+# https://peps.python.org/pep-0621/#dependencies-optional-dependencies
+[project.optional-dependencies]
+test = ["pytest>=6.0", "pytest-cov"]
+dev = [
+    "black",
+    "ipython",
+    "pdbpp",
+    "pre-commit",
+    "pytest-cov",
+    "pytest",
+    "rich",
+    "ruff",
+]
+
+[project.urls]
+homepage = "https://github.com/brisvag/cs2star"
+repository = "https://github.com/brisvag/cs2star"
+
+# same as console_scripts entry point
 [project.scripts]
 cs2star = "cs2star.cs2star:main"
+
+# Entry points
+# https://peps.python.org/pep-0621/#entry-points
+# [project.entry-points."spam.magical"]
+# tomatoes = "spam:main_tomatoes"
+
+# https://hatch.pypa.io/latest/config/metadata/
+[tool.hatch.version]
+source = "vcs"
+
+# https://hatch.pypa.io/latest/config/build/#file-selection
+# [tool.hatch.build.targets.sdist]
+# include = ["/src", "/tests"]
+
+[tool.hatch.build.targets.wheel]
+only-include = ["src"]
+sources = ["src"]
+
+# https://github.com/charliermarsh/ruff
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+src = ["src"]
+# https://beta.ruff.rs/docs/rules/
+select = [
+    "E",    # style errors
+    "W",    # style warnings
+    "F",    # flakes
+    "D",    # pydocstyle
+    "I",    # isort
+    "UP",   # pyupgrade
+    "C4",   # flake8-comprehensions
+    "B",    # flake8-bugbear
+    "A001", # flake8-builtins
+    "RUF",  # ruff-specific rules
+]
+# I do this to get numpy-style docstrings AND retain
+# D417 (Missing argument descriptions in the docstring)
+# otherwise, see:
+# https://beta.ruff.rs/docs/faq/#does-ruff-support-numpy-or-google-style-docstrings
+# https://github.com/charliermarsh/ruff/issues/2606
+ignore = [
+    "D100", # Missing docstring in public module
+    "D107", # Missing docstring in __init__
+    "D203", # 1 blank line required before class docstring
+    "D212", # Multi-line docstring summary should start at the first line
+    "D213", # Multi-line docstring summary should start at the second line
+    "D401", # First line should be in imperative mood
+    "D413", # Missing blank line after last section
+    "D416", # Section name should end with a colon
+]
+
+[tool.ruff.per-file-ignores]
+"tests/*.py" = ["D", "S"]
+
+# https://docs.pytest.org/en/6.2.x/customize.html
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
+filterwarnings = ["error"]
+
+# https://coverage.readthedocs.io/en/6.4/config.html
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "@overload",
+    "except ImportError",
+    "\\.\\.\\.",
+    "raise NotImplementedError()",
+]
+[tool.coverage.run]
+source = ["cs2star"]
+
+# https://github.com/mgedmin/check-manifest#configuration
+[tool.check-manifest]
+ignore = [
+    ".github_changelog_generator",
+    ".pre-commit-config.yaml",
+    ".ruff_cache/**/*",
+    "tests/**/*",
+]
+
+# # for things that require compilation
+# # https://cibuildwheel.readthedocs.io/en/stable/options/
+# [tool.cibuildwheel]
+# # Skip 32-bit builds & PyPy wheels on all platforms
+# skip = ["*-manylinux_i686", "*-musllinux_i686", "*-win32", "pp*"]
+# test-extras = ["test"]
+# test-command = "pytest {project}/tests -v"
+# test-skip = "*-musllinux*"
+
+# [tool.cibuildwheel.environment]
+# HATCH_BUILD_HOOKS_ENABLE = "1"
