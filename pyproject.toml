@@ -35,14 +35,11 @@ dependencies = [
 # extras
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
-test = ["pytest>=6.0", "pytest-cov"]
 dev = [
     "black",
     "ipython",
     "pdbpp",
     "pre-commit",
-    "pytest-cov",
-    "pytest",
     "rich",
     "ruff",
 ]
@@ -55,18 +52,9 @@ repository = "https://github.com/brisvag/cs2star"
 [project.scripts]
 cs2star = "cs2star.cs2star:main"
 
-# Entry points
-# https://peps.python.org/pep-0621/#entry-points
-# [project.entry-points."spam.magical"]
-# tomatoes = "spam:main_tomatoes"
-
 # https://hatch.pypa.io/latest/config/metadata/
 [tool.hatch.version]
 source = "vcs"
-
-# https://hatch.pypa.io/latest/config/build/#file-selection
-# [tool.hatch.build.targets.sdist]
-# include = ["/src", "/tests"]
 
 [tool.hatch.build.targets.wheel]
 only-include = ["src"]
@@ -109,12 +97,6 @@ ignore = [
 [tool.ruff.per-file-ignores]
 "tests/*.py" = ["D", "S"]
 
-# https://docs.pytest.org/en/6.2.x/customize.html
-[tool.pytest.ini_options]
-minversion = "6.0"
-testpaths = ["tests"]
-filterwarnings = ["error"]
-
 # https://coverage.readthedocs.io/en/6.4/config.html
 [tool.coverage.report]
 exclude_lines = [
@@ -134,17 +116,4 @@ ignore = [
     ".github_changelog_generator",
     ".pre-commit-config.yaml",
     ".ruff_cache/**/*",
-    "tests/**/*",
 ]
-
-# # for things that require compilation
-# # https://cibuildwheel.readthedocs.io/en/stable/options/
-# [tool.cibuildwheel]
-# # Skip 32-bit builds & PyPy wheels on all platforms
-# skip = ["*-manylinux_i686", "*-musllinux_i686", "*-win32", "pp*"]
-# test-extras = ["test"]
-# test-command = "pytest {project}/tests -v"
-# test-skip = "*-musllinux*"
-
-# [tool.cibuildwheel.environment]
-# HATCH_BUILD_HOOKS_ENABLE = "1"
