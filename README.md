@@ -1,5 +1,11 @@
 # cs2star
 
+[![License](https://img.shields.io/pypi/l/cs2star.svg?color=green)](https://github.com/brisvag/cs2star/raw/main/LICENSE)
+[![PyPI](https://img.shields.io/pypi/v/cs2star.svg?color=green)](https://pypi.org/project/cs2star)
+[![Python Version](https://img.shields.io/pypi/pyversions/cs2star.svg?color=green)](https://python.org)
+[![CI](https://github.com/brisvag/cs2star/actions/workflows/ci.yml/badge.svg)](https://github.com/brisvag/cs2star/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/brisvag/cs2star/branch/main/graph/badge.svg)](https://codecov.io/gh/brisvag/cs2star)
+
 A simple utility that wraps around `csparc2star.py` to convert particle positions from Cryosparc JOB directories into a RELION-ready directory. On top of what `csparc2star.py` already does, this script will traverse the Cryosparc job tree to find the relevant `.cs` files, automatically symlinks (or copies) the `.mrc` files (renaming them as appropriate to `mrcs` and updating the `rlnMicrographName` column to reflect the change). `cs2star` also separates micrograph information in a `micrographs.star` file, which is required in several relion jobs.
 
 # Installation
