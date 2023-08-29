@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def update_dict(d1, d2):
-    """Recursively update a nested dictionary."""
+    """Recursively update nested dict."""
     for k1, v in d1.items():
         for k2 in v:
             if not d1[k1][k2]:
@@ -48,8 +48,8 @@ def find_cs_files(job_dir, sets=None, visited=None):
         metafiles = output["metafiles"]
         passthrough = output["passthrough"]
         k2 = "passthrough" if passthrough else "cs"
-        if j_type == "hetero_refine":
-            # hetero refine is special because the "good" output is split into multiple files
+        if j_type in ("hetero_refine", "homo_abinit", "class_3D"):
+            # refine is special because the "good" output is split into multiple files
             if (not passthrough and "particles_class_" in output["group_name"]) or (
                 passthrough and output["group_name"] == "particles_all_classes"
             ):
@@ -69,6 +69,7 @@ def find_cs_files(job_dir, sets=None, visited=None):
                         "remainder",
                         "rejected",
                         "uncategorized",
+                        "unused",
                     )
                 ):
                     continue

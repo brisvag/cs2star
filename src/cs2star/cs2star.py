@@ -113,7 +113,7 @@ def main(
         sys.exit(1)
 
     particles_passthrough = sorted(job_files["particles"]["passthrough"])
-    micrographs = sorted(job_files["micrographs"]["cs"])
+    mic_files = sorted(job_files["micrographs"]["cs"])
     micrographs_passthrough = sorted(job_files["micrographs"]["passthrough"])
 
     dest_dir = Path(dest_dir)
@@ -134,7 +134,7 @@ def main(
         Particle Passthrough files:
         {', '.join(str(f) for f in particles_passthrough)}
         Micrograph files:
-        {', '.join(str(f) for f in micrographs)}
+        {', '.join(str(f) for f in mic_files)}
         Micrograph Passthrough files:
         {', '.join(str(f) for f in micrographs_passthrough)}
         Will create: {', '.join(str(f) for f in [*to_create, dest_star, dest_mic_star])}
@@ -171,15 +171,15 @@ def main(
                 f"passthroughs: {particles_passthrough}"
             )
 
-    if len(micrographs) != len(micrographs_passthrough):
+    if len(mic_files) != len(micrographs_passthrough):
         if len(micrographs_passthrough) == 0:
             pass
         elif len(micrographs_passthrough) == 1:
-            micrographs_passthrough = micrographs_passthrough * len(micrographs)
+            micrographs_passthrough = micrographs_passthrough * len(mic_files)
         else:
             raise ValueError(
                 "Number of passthrough files and micrographs files is incompatible:\n"
-                f"micrographs: {micrographs}\n"
+                f"micrographs: {mic_files}\n"
                 f"passthroughs: {micrographs_passthrough}"
             )
 
@@ -213,33 +213,42 @@ def main(
 
         df_mic = pd.DataFrame()
         for f, p in progress.track(
-            list(zip(micrographs, micrographs_passthrough)),
+            list(zip(mic_files, micrographs_passthrough)),
             description="Loading micrograph data...",
         ):
             data = np.load(f)
-            df_mic_i = pyem.metadata.parse_cryosparc_2_cs(
+            df_mic_i = pyem.metadata.cryosparc_2_cs_movie_parameters(
                 data,
                 passthroughs=[p],
-                minphic=0,
-                boxsize=None,
-                swapxy=swapxy,
-                invertx=invertx,
-                inverty=inverty,
+                trajdir=str(f.parent.parent),
             )
             df_mic = pd.concat([df_mic, df_mic_i], ignore_index=True)
 
         # clean up
-        cleaning = progress.add_task("Cleaning up data...", total=2)
+        cleaning = progress.add_task("Cleaning up particle data...", total=2)
         df_part = pyem.star.check_defaults(df_part, inplace=True)
         progress.update(cleaning, advance=1)
         df_part = pyem.star.remove_deprecated_relion2(df_part, inplace=True)
         progress.update(cleaning, advance=1)
 
         # clean up
-        cleaning = progress.add_task("Cleaning up data...", total=2)
+        cleaning = progress.add_task("Cleaning up micrograph data...", total=3)
+        # also, optics are changed to 1-based indexing by pyem in parse_cryosparc_2_cs so we match it
+        # and we do it before the opticgroupname is generated from it
+        df_mic["rlnOpticsGroup"] += 1
         df_mic = pyem.star.check_defaults(df_mic, inplace=True)
         progress.update(cleaning, advance=1)
         df_mic = pyem.star.remove_deprecated_relion2(df_mic, inplace=True)
+        progress.update(cleaning, advance=1)
+        # need to fix the micrographs optics because pyem is missing some things that relion wants
+        optics = ["rlnOpticsGroup"] + [
+            head
+            for head in ("rlnVoltage", "rlnSphericalAberration")
+            if head in df_part and head not in df_mic
+        ]
+        opt = df_part.get(optics).drop_duplicates()
+        df_mic = df_mic.loc[:, ~df_mic.columns.duplicated()]
+        df_mic = df_mic.merge(opt, on="rlnOpticsGroup")
         progress.update(cleaning, advance=1)
 
         # symlink/copy images
@@ -287,10 +296,13 @@ def main(
                 ) from e
             # change them to the copied/symlinked version
             target_dir = dest_dir / "micrographs"
+            progress.start_task(fix_mg_paths)
             df_part["rlnMicrographName"] = df_part["rlnMicrographName"].apply(
                 fix_path, new_parent=target_dir
             )
-            progress.start_task(fix_mg_paths)
+            df_mic["rlnMicrographName"] = df_mic["rlnMicrographName"].apply(
+                fix_path, new_parent=target_dir
+            )
             progress.update(fix_mg_paths, completed=100)
 
             copy_images(paths, dest_micrographs, label="micrographs", copy=copy)
@@ -303,7 +315,7 @@ def main(
                 raise click.UsageError(
                     "could not find patch paths in the data. Were the particles ever extracted?"
                 )
-            fix_patch_paths = progress.add_task("Fixing patches paths...", start=False)
+            fix_patch_paths = progress.add_task("Fixing particle paths...", start=False)
             progress.start_task(fix_patch_paths)
             paths = np.unique(df_part[col_name].to_numpy())
             # change them to the copied/symlinked version
