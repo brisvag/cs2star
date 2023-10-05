@@ -49,6 +49,7 @@ import click
 @click.option("--swapxy/--no-swapxy", default=True, help="swap x and y axes")
 @click.option("--inverty/--no-inverty", default=False, help="invert y axis")
 @click.option("--invertx/--no-invertx", default=False, help="invert x axis")
+@click.version_option()
 def main(
     job_dir,
     dest_dir,
@@ -235,6 +236,8 @@ def main(
         cleaning = progress.add_task("Cleaning up micrograph data...", total=3)
         # also, optics are changed to 1-based indexing by pyem in parse_cryosparc_2_cs so we match it
         # and we do it before the opticgroupname is generated from it
+        if "rlnOpticsGroup" not in df_mic.columns:
+            df_mic["rlnOpticsGroup"] = 0
         df_mic["rlnOpticsGroup"] += 1
         df_mic = pyem.star.check_defaults(df_mic, inplace=True)
         progress.update(cleaning, advance=1)
