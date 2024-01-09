@@ -83,8 +83,27 @@ def main(
     Note that if -p/-m are not passed, those columns are not
     usable (due to the mrc extension and broken path).
     """
-    import shutil
     import sys
+
+    try:
+        from pyem.metadata import (
+            cryosparc_2_cs_movie_parameters,
+            parse_cryosparc_2_cs,
+        )
+        from pyem.star import (
+            UCSF,
+            Relion,
+            check_defaults,
+            remove_deprecated_relion2,
+            select_classes,
+            write_star,
+        )
+    except ModuleNotFoundError:
+        print("You need to install pyem for cs2star to work:")
+        print("  pip install git+https://github.com/brisvag/pyem.git")
+        sys.exit(1)
+
+    import shutil
     from inspect import cleandoc
     from pathlib import Path
 
@@ -93,13 +112,6 @@ def main(
     from rich import print
     from rich.panel import Panel
     from rich.progress import Progress
-
-    try:
-        import pyem
-    except ModuleNotFoundError:
-        print("You need to install pyem for cs2star to work:")
-        print("  pip install git+https://github.com/brisvag/pyem.git")
-        sys.exit(1)
 
     from .job_parser import find_cs_files
 
@@ -196,7 +208,7 @@ def main(
             description="Loading particle data...",
         ):
             data = np.load(f)
-            df_part_i = pyem.metadata.parse_cryosparc_2_cs(
+            df_part_i = parse_cryosparc_2_cs(
                 data,
                 passthroughs=[p],
                 minphic=0,
@@ -210,7 +222,7 @@ def main(
         if classes is not None:
             classes = classes.split(",")
             print(f'selecting classes: {", ".join(classes)}')
-            df_part = pyem.star.select_classes(df_part, classes)
+            df_part = select_classes(df_part, classes)
 
         df_mic = pd.DataFrame()
         for f, p in progress.track(
@@ -218,7 +230,7 @@ def main(
             description="Loading micrograph data...",
         ):
             data = np.load(f)
-            df_mic_i = pyem.metadata.cryosparc_2_cs_movie_parameters(
+            df_mic_i = cryosparc_2_cs_movie_parameters(
                 data,
                 passthroughs=[p],
                 trajdir=str(f.parent.parent),
@@ -227,31 +239,31 @@ def main(
 
         # clean up
         cleaning = progress.add_task("Cleaning up particle data...", total=2)
-        df_part = pyem.star.check_defaults(df_part, inplace=True)
+        df_part = check_defaults(df_part, inplace=True)
         progress.update(cleaning, advance=1)
-        df_part = pyem.star.remove_deprecated_relion2(df_part, inplace=True)
+        df_part = remove_deprecated_relion2(df_part, inplace=True)
         progress.update(cleaning, advance=1)
 
         # clean up
         cleaning = progress.add_task("Cleaning up micrograph data...", total=3)
         # also, optics are changed to 1-based indexing by pyem in parse_cryosparc_2_cs so we match it
         # and we do it before the opticgroupname is generated from it
-        if "rlnOpticsGroup" not in df_mic.columns:
-            df_mic["rlnOpticsGroup"] = 0
-        df_mic["rlnOpticsGroup"] += 1
-        df_mic = pyem.star.check_defaults(df_mic, inplace=True)
+        if Relion.OPTICSGROUP not in df_mic.columns:
+            df_mic[Relion.OPTICSGROUP] = 0
+        df_mic[Relion.OPTICSGROUP] += 1
+        df_mic = check_defaults(df_mic, inplace=True)
         progress.update(cleaning, advance=1)
-        df_mic = pyem.star.remove_deprecated_relion2(df_mic, inplace=True)
+        df_mic = remove_deprecated_relion2(df_mic, inplace=True)
         progress.update(cleaning, advance=1)
         # need to fix the micrographs optics because pyem is missing some things that relion wants
-        optics = ["rlnOpticsGroup"] + [
+        optics = [Relion.OPTICSGROUP] + [
             head
-            for head in ("rlnVoltage", "rlnSphericalAberration")
+            for head in (Relion.VOLTAGE, Relion.CS)
             if head in df_part and head not in df_mic
         ]
         opt = df_part.get(optics).drop_duplicates()
         df_mic = df_mic.loc[:, ~df_mic.columns.duplicated()]
-        df_mic = df_mic.merge(opt, on="rlnOpticsGroup")
+        df_mic = df_mic.merge(opt, on=Relion.OPTICSGROUP)
         progress.update(cleaning, advance=1)
 
         # symlink/copy images
@@ -292,7 +304,7 @@ def main(
         if micrographs:
             fix_mg_paths = progress.add_task("Fixing micrograph paths...", start=False)
             try:
-                paths = np.unique(df_part["rlnMicrographName"].to_numpy())
+                paths = np.unique(df_part[Relion.MICROGRAPH_NAME].to_numpy())
             except KeyError as e:
                 raise click.UsageError(
                     "could not find micrograph paths in the data."
@@ -300,17 +312,17 @@ def main(
             # change them to the copied/symlinked version
             target_dir = dest_dir / "micrographs"
             progress.start_task(fix_mg_paths)
-            df_part["rlnMicrographName"] = df_part["rlnMicrographName"].apply(
+            df_part[Relion.MICROGRAPH_NAME] = df_part[Relion.MICROGRAPH_NAME].apply(
                 fix_path, new_parent=target_dir
             )
-            df_mic["rlnMicrographName"] = df_mic["rlnMicrographName"].apply(
+            df_mic[Relion.MICROGRAPH_NAME] = df_mic[Relion.MICROGRAPH_NAME].apply(
                 fix_path, new_parent=target_dir
             )
             progress.update(fix_mg_paths, completed=100)
 
             copy_images(paths, dest_micrographs, label="micrographs", copy=copy)
         if patches:
-            for col in ("rlnImageName", "ucsfImagePath"):
+            for col in (Relion.IMAGE_NAME, UCSF.IMAGE_PATH):
                 if col in df_part.columns:
                     col_name = col
                     break
@@ -336,9 +348,7 @@ def main(
         )
         # write to file
         progress.start_task(writing)
-        pyem.star.write_star(str(dest_star), df_part, resort_records=True, optics=True)
+        write_star(str(dest_star), df_part, resort_records=True, optics=True)
         progress.update(writing, advance=len(df_part.index))
-        pyem.star.write_star(
-            str(dest_mic_star), df_mic, resort_records=True, optics=True
-        )
+        write_star(str(dest_mic_star), df_mic, resort_records=True, optics=True)
         progress.update(writing, advance=len(df_mic.index))
