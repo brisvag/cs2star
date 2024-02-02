@@ -275,7 +275,9 @@ def main(
             ):
                 orig = job_dir.parent / img
                 # new path + add s to extension for relion
-                moved = Path(to_dir / (orig.name + ("s" if add_s else "")))
+                dest_dir = to_dir / orig.parent.parent.name
+                dest_dir.mkdir(parents=True, exist_ok=True)
+                moved = Path(dest_dir / (orig.name + ("s" if add_s else "")))
                 if moved.is_file() and overwrite <= 1:
                     exists = True
                     continue
@@ -294,8 +296,10 @@ def main(
 
         def fix_path(path, new_parent, add_s=False):
             """Replace the parent and add `s` at the end of a path."""
-            basename = Path(path).name
-            return str(new_parent / basename) + ("s" if add_s else "")
+            path = Path(path)
+            return str(new_parent / path.parent.parent.name / path.name) + (
+                "s" if add_s else ""
+            )
 
         dest_dir = (
             dest_dir.absolute()
@@ -315,9 +319,10 @@ def main(
             df_part[Relion.MICROGRAPH_NAME] = df_part[Relion.MICROGRAPH_NAME].apply(
                 fix_path, new_parent=target_dir
             )
-            df_mic[Relion.MICROGRAPH_NAME] = df_mic[Relion.MICROGRAPH_NAME].apply(
-                fix_path, new_parent=target_dir
-            )
+            if Relion.MICROGRAPH_NAME in df_mic.columns:
+                df_mic[Relion.MICROGRAPH_NAME] = df_mic[Relion.MICROGRAPH_NAME].apply(
+                    fix_path, new_parent=target_dir
+                )
             progress.update(fix_mg_paths, completed=100)
 
             copy_images(paths, dest_micrographs, label="micrographs", copy=copy)
